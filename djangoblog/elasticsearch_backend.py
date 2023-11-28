@@ -23,8 +23,7 @@ class ElasticSearchBackend(BaseSearchBackend):
 
     def _get_models(self, iterable):
         models = iterable if iterable and iterable[0] else Article.objects.all()
-        docs = self.manager.convert_to_doc(models)
-        return docs
+        return self.manager.convert_to_doc(models)
 
     def _create(self, models):
         self.manager.create_index()
@@ -73,7 +72,7 @@ class ElasticSearchBackend(BaseSearchBackend):
 
     @log_query
     def search(self, query_string, **kwargs):
-        logger.info('search query_string:' + query_string)
+        logger.info(f'search query_string:{query_string}')
 
         start_offset = kwargs.get('start_offset')
         end_offset = kwargs.get('end_offset')
@@ -89,17 +88,17 @@ class ElasticSearchBackend(BaseSearchBackend):
               minimum_should_match="70%")
 
         search = ArticleDocument.search() \
-                     .query('bool', filter=[q]) \
-                     .filter('term', status='p') \
-                     .filter('term', type='a') \
-                     .source(False)[start_offset: end_offset]
+                         .query('bool', filter=[q]) \
+                         .filter('term', status='p') \
+                         .filter('term', type='a') \
+                         .source(False)[start_offset: end_offset]
 
         results = search.execute()
         hits = results['hits'].total
         raw_results = []
+        app_label = 'blog'
+        model_name = 'Article'
         for raw_result in results['hits']['hits']:
-            app_label = 'blog'
-            model_name = 'Article'
             additional_fields = {}
 
             result_class = SearchResult
@@ -147,7 +146,7 @@ class ElasticSearchQuery(BaseSearchQuery):
 
             for char in self.backend.RESERVED_CHARACTERS:
                 if char in word:
-                    word = "'%s'" % word
+                    word = f"'{word}'"
                     break
 
             cleaned_words.append(word)
@@ -165,8 +164,9 @@ class ElasticSearchQuery(BaseSearchQuery):
         return self._spelling_suggestion
 
     def build_params(self, spelling_query=None):
-        kwargs = super(ElasticSearchQuery, self).build_params(spelling_query=spelling_query)
-        return kwargs
+        return super(ElasticSearchQuery, self).build_params(
+            spelling_query=spelling_query
+        )
 
 
 class ElasticSearchModelSearchForm(ModelSearchForm):
@@ -174,8 +174,7 @@ class ElasticSearchModelSearchForm(ModelSearchForm):
     def search(self):
         # 是否建议搜索
         self.searchqueryset.query.backend.is_suggest = self.data.get("is_suggest") != "no"
-        sqs = super().search()
-        return sqs
+        return super().search()
 
 
 class ElasticSearchEngine(BaseEngine):
