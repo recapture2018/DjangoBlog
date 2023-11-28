@@ -34,14 +34,13 @@ class CommentAdmin(admin.ModelAdmin):
         info = (obj.author._meta.app_label, obj.author._meta.model_name)
         link = reverse('admin:%s_%s_change' % info, args=(obj.author.id,))
         return format_html(
-            u'<a href="%s">%s</a>' %
-            (link, obj.author.nickname if obj.author.nickname else obj.author.email))
+            f'<a href="{link}">{obj.author.nickname if obj.author.nickname else obj.author.email}</a>'
+        )
 
     def link_to_article(self, obj):
         info = (obj.author._meta.app_label, obj.author._meta.model_name)
         link = reverse('admin:%s_%s_change' % info, args=(obj.article.id,))
-        return format_html(
-            u'<a href="%s">%s</a>' % (link, obj.article.title))
+        return format_html(f'<a href="{link}">{obj.article.title}</a>')
 
     link_to_userinfo.short_description = '用户'
     link_to_article.short_description = '文章'

@@ -39,9 +39,7 @@ class ArticleListView(ListView):
     @property
     def page_number(self):
         page_kwarg = self.page_kwarg
-        page = self.kwargs.get(
-            page_kwarg) or self.request.GET.get(page_kwarg) or 1
-        return page
+        return self.kwargs.get(page_kwarg) or self.request.GET.get(page_kwarg) or 1
 
     def get_queryset_cache_key(self):
         """
@@ -61,8 +59,7 @@ class ArticleListView(ListView):
         :param cache_key: 缓存key
         :return:
         '''
-        value = cache.get(cache_key)
-        if value:
+        if value := cache.get(cache_key):
             logger.info('get view cache.key:{key}'.format(key=cache_key))
             return value
         else:
@@ -77,8 +74,7 @@ class ArticleListView(ListView):
         :return:
         '''
         key = self.get_queryset_cache_key()
-        value = self.get_queryset_from_cache(key)
-        return value
+        return self.get_queryset_from_cache(key)
 
     def get_context_data(self, **kwargs):
         kwargs['linktype'] = self.link_type
@@ -93,12 +89,10 @@ class IndexView(ArticleListView):
     link_type = LinkShowType.I
 
     def get_queryset_data(self):
-        article_list = Article.objects.filter(type='a', status='p')
-        return article_list
+        return Article.objects.filter(type='a', status='p')
 
     def get_queryset_cache_key(self):
-        cache_key = 'index_{page}'.format(page=self.page_number)
-        return cache_key
+        return 'index_{page}'.format(page=self.page_number)
 
 
 class ArticleDetailView(DetailView):
@@ -128,21 +122,20 @@ class ArticleDetailView(DetailView):
             page = 1
         else:
             page = int(page)
-            if page < 1:
-                page = 1
-            if page > paginator.num_pages:
-                page = paginator.num_pages
-
+            page = max(page, 1)
+            page = min(page, paginator.num_pages)
         p_comments = paginator.page(page)
         next_page = p_comments.next_page_number() if p_comments.has_next() else None
         prev_page = p_comments.previous_page_number() if p_comments.has_previous() else None
 
         if next_page:
             kwargs[
-                'comment_next_page_url'] = self.object.get_absolute_url() + f'?comment_page={next_page}#commentlist-container'
+                'comment_next_page_url'
+            ] = f'{self.object.get_absolute_url()}?comment_page={next_page}#commentlist-container'
         if prev_page:
             kwargs[
-                'comment_prev_page_url'] = self.object.get_absolute_url() + f'?comment_page={prev_page}#commentlist-container'
+                'comment_prev_page_url'
+            ] = f'{self.object.get_absolute_url()}?comment_page={prev_page}#commentlist-container'
         kwargs['form'] = comment_form
         kwargs['article_comments'] = article_comments
         kwargs['p_comments'] = p_comments
@@ -169,18 +162,16 @@ class CategoryDetailView(ArticleListView):
         self.categoryname = categoryname
         categorynames = list(
             map(lambda c: c.name, category.get_sub_categorys()))
-        article_list = Article.objects.filter(
-            category__name__in=categorynames, status='p')
-        return article_list
+        return Article.objects.filter(category__name__in=categorynames, status='p')
 
     def get_queryset_cache_key(self):
         slug = self.kwargs['category_name']
         category = get_object_or_404(Category, slug=slug)
         categoryname = category.name
         self.categoryname = categoryname
-        cache_key = 'category_list_{categoryname}_{page}'.format(
-            categoryname=categoryname, page=self.page_number)
-        return cache_key
+        return 'category_list_{categoryname}_{page}'.format(
+            categoryname=categoryname, page=self.page_number
+        )
 
     def get_context_data(self, **kwargs):
 
@@ -203,15 +194,15 @@ class AuthorDetailView(ArticleListView):
     def get_queryset_cache_key(self):
         from uuslug import slugify
         author_name = slugify(self.kwargs['author_name'])
-        cache_key = 'author_{author_name}_{page}'.format(
-            author_name=author_name, page=self.page_number)
-        return cache_key
+        return 'author_{author_name}_{page}'.format(
+            author_name=author_name, page=self.page_number
+        )
 
     def get_queryset_data(self):
         author_name = self.kwargs['author_name']
-        article_list = Article.objects.filter(
-            author__username=author_name, type='a', status='p')
-        return article_list
+        return Article.objects.filter(
+            author__username=author_name, type='a', status='p'
+        )
 
     def get_context_data(self, **kwargs):
         author_name = self.kwargs['author_name']
@@ -231,18 +222,16 @@ class TagDetailView(ArticleListView):
         tag = get_object_or_404(Tag, slug=slug)
         tag_name = tag.name
         self.name = tag_name
-        article_list = Article.objects.filter(
-            tags__name=tag_name, type='a', status='p')
-        return article_list
+        return Article.objects.filter(tags__name=tag_name, type='a', status='p')
 
     def get_queryset_cache_key(self):
         slug = self.kwargs['tag_name']
         tag = get_object_or_404(Tag, slug=slug)
         tag_name = tag.name
         self.name = tag_name
-        cache_key = 'tag_{tag_name}_{page}'.format(
-            tag_name=tag_name, page=self.page_number)
-        return cache_key
+        return 'tag_{tag_name}_{page}'.format(
+            tag_name=tag_name, page=self.page_number
+        )
 
     def get_context_data(self, **kwargs):
         # tag_name = self.kwargs['tag_name']
@@ -265,8 +254,7 @@ class ArchivesView(ArticleListView):
         return Article.objects.filter(status='p').all()
 
     def get_queryset_cache_key(self):
-        cache_key = 'archives'
-        return cache_key
+        return 'archives'
 
 
 class LinkListView(ListView):
@@ -301,45 +289,43 @@ def fileupload(request):
     :param request:
     :return:
     """
-    if request.method == 'POST':
-        sign = request.GET.get('sign', None)
-        if not sign:
-            return HttpResponseForbidden()
-        if not sign == get_sha256(get_sha256(settings.SECRET_KEY)):
-            return HttpResponseForbidden()
-        response = []
-        for filename in request.FILES:
-            timestr = timezone.now().strftime('%Y/%m/%d')
-            imgextensions = ['jpg', 'png', 'jpeg', 'bmp']
-            fname = u''.join(str(filename))
-            isimage = len([i for i in imgextensions if fname.find(i) >= 0]) > 0
-            blogsetting = get_blog_setting()
-
-            basepath = r'{basedir}/{type}/{timestr}'.format(
-                basedir=blogsetting.resource_path,
-                type='files' if not isimage else 'image',
-                timestr=timestr)
-            if settings.TESTING:
-                basepath = settings.BASE_DIR + '/uploads'
-            url = 'https://resource.lylinux.net/{type}/{timestr}/{filename}'.format(
-                type='files' if not isimage else 'image', timestr=timestr, filename=filename)
-            if not os.path.exists(basepath):
-                os.makedirs(basepath)
-            savepath = os.path.normpath(os.path.join(basepath, f"{uuid.uuid4().hex}{os.path.splitext(filename)[-1]}"))
-            if not savepath.startswith(basepath):
-                return HttpResponse("only for post")
-            with open(savepath, 'wb+') as wfile:
-                for chunk in request.FILES[filename].chunks():
-                    wfile.write(chunk)
-            if isimage:
-                from PIL import Image
-                image = Image.open(savepath)
-                image.save(savepath, quality=20, optimize=True)
-            response.append(url)
-        return HttpResponse(response)
-
-    else:
+    if request.method != 'POST':
         return HttpResponse("only for post")
+    sign = request.GET.get('sign', None)
+    if not sign:
+        return HttpResponseForbidden()
+    if sign != get_sha256(get_sha256(settings.SECRET_KEY)):
+        return HttpResponseForbidden()
+    response = []
+    for filename in request.FILES:
+        timestr = timezone.now().strftime('%Y/%m/%d')
+        imgextensions = ['jpg', 'png', 'jpeg', 'bmp']
+        fname = u''.join(str(filename))
+        isimage = len([i for i in imgextensions if i in fname]) > 0
+        blogsetting = get_blog_setting()
+
+        basepath = r'{basedir}/{type}/{timestr}'.format(
+            basedir=blogsetting.resource_path,
+            type='files' if not isimage else 'image',
+            timestr=timestr)
+        if settings.TESTING:
+            basepath = f'{settings.BASE_DIR}/uploads'
+        url = 'https://resource.lylinux.net/{type}/{timestr}/{filename}'.format(
+            type='files' if not isimage else 'image', timestr=timestr, filename=filename)
+        if not os.path.exists(basepath):
+            os.makedirs(basepath)
+        savepath = os.path.normpath(os.path.join(basepath, f"{uuid.uuid4().hex}{os.path.splitext(filename)[-1]}"))
+        if not savepath.startswith(basepath):
+            return HttpResponse("only for post")
+        with open(savepath, 'wb+') as wfile:
+            for chunk in request.FILES[filename].chunks():
+                wfile.write(chunk)
+        if isimage:
+            from PIL import Image
+            image = Image.open(savepath)
+            image.save(savepath, quality=20, optimize=True)
+        response.append(url)
+    return HttpResponse(response)
 
 
 def page_not_found_view(
@@ -349,11 +335,15 @@ def page_not_found_view(
     if exception:
         logger.error(exception)
     url = request.get_full_path()
-    return render(request,
-                  template_name,
-                  {'message': '哎呀，您访问的地址 ' + url + ' 是一个未知的地方。请点击首页看看别的？',
-                   'statuscode': '404'},
-                  status=404)
+    return render(
+        request,
+        template_name,
+        {
+            'message': f'哎呀，您访问的地址 {url} 是一个未知的地方。请点击首页看看别的？',
+            'statuscode': '404',
+        },
+        status=404,
+    )
 
 
 def server_error_view(request, template_name='blog/error_page.html'):

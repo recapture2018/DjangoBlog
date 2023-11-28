@@ -33,8 +33,8 @@ def get_redirecturl(request):
     p = urlparse(nexturl)
     if p.netloc:
         site = get_current_site().domain
-        if not p.netloc.replace('www.', '') == site.replace('www.', ''):
-            logger.info('非法url:' + nexturl)
+        if p.netloc.replace('www.', '') != site.replace('www.', ''):
+            logger.info(f'非法url:{nexturl}')
             return "/"
     return nexturl
 
@@ -62,7 +62,7 @@ def authorize(request):
     try:
         rsp = manager.get_access_token_by_code(code)
     except OAuthAccessTokenException as e:
-        logger.warning("OAuthAccessTokenException:" + str(e))
+        logger.warning(f"OAuthAccessTokenException:{str(e)}")
         return HttpResponseRedirect('/')
     except Exception as e:
         logger.error(e)
@@ -70,65 +70,64 @@ def authorize(request):
     nexturl = get_redirecturl(request)
     if not rsp:
         return HttpResponseRedirect(manager.get_authorization_url(nexturl))
-    user = manager.get_oauth_userinfo()
-    if user:
-        if not user.nikename or not user.nikename.strip():
-            user.nikename = "djangoblog" + timezone.now().strftime('%y%m%d%I%M%S')
-        try:
-            temp = OAuthUser.objects.get(type=type, openid=user.openid)
-            temp.picture = user.picture
-            temp.matedata = user.matedata
-            temp.nikename = user.nikename
-            user = temp
-        except ObjectDoesNotExist:
-            pass
-        # facebook的token过长
-        if type == 'facebook':
-            user.token = ''
-        if user.email:
-            with transaction.atomic():
-                author = None
-                try:
-                    author = get_user_model().objects.get(id=user.author_id)
-                except ObjectDoesNotExist:
-                    pass
-                if not author:
-                    result = get_user_model().objects.get_or_create(email=user.email)
-                    author = result[0]
-                    if result[1]:
-                        try:
-                            get_user_model().objects.get(username=user.nikename)
-                        except ObjectDoesNotExist:
-                            author.username = user.nikename
-                        else:
-                            author.username = "djangoblog" + timezone.now().strftime('%y%m%d%I%M%S')
-                        author.source = 'authorize'
-                        author.save()
-
-                user.author = author
-                user.save()
-
-                oauth_user_login_signal.send(
-                    sender=authorize.__class__, id=user.id)
-                login(request, author)
-                return HttpResponseRedirect(nexturl)
-        else:
-            user.save()
-            url = reverse('oauth:require_email', kwargs={
-                'oauthid': user.id
-            })
-
-            return HttpResponseRedirect(url)
-    else:
+    if not (user := manager.get_oauth_userinfo()):
         return HttpResponseRedirect(nexturl)
+    if not user.nikename or not user.nikename.strip():
+        user.nikename = "djangoblog" + timezone.now().strftime('%y%m%d%I%M%S')
+    try:
+        temp = OAuthUser.objects.get(type=type, openid=user.openid)
+        temp.picture = user.picture
+        temp.matedata = user.matedata
+        temp.nikename = user.nikename
+        user = temp
+    except ObjectDoesNotExist:
+        pass
+    # facebook的token过长
+    if type == 'facebook':
+        user.token = ''
+    if user.email:
+        with transaction.atomic():
+            author = None
+            try:
+                author = get_user_model().objects.get(id=user.author_id)
+            except ObjectDoesNotExist:
+                pass
+            if not author:
+                result = get_user_model().objects.get_or_create(email=user.email)
+                author = result[0]
+                if result[1]:
+                    try:
+                        get_user_model().objects.get(username=user.nikename)
+                    except ObjectDoesNotExist:
+                        author.username = user.nikename
+                    else:
+                        author.username = "djangoblog" + timezone.now().strftime('%y%m%d%I%M%S')
+                    author.source = 'authorize'
+                    author.save()
+
+            user.author = author
+            user.save()
+
+            oauth_user_login_signal.send(
+                sender=authorize.__class__, id=user.id)
+            login(request, author)
+            return HttpResponseRedirect(nexturl)
+    else:
+        user.save()
+        url = reverse('oauth:require_email', kwargs={
+            'oauthid': user.id
+        })
+
+        return HttpResponseRedirect(url)
 
 
 def emailconfirm(request, id, sign):
     if not sign:
         return HttpResponseForbidden()
-    if not get_sha256(settings.SECRET_KEY +
-                      str(id) +
-                      settings.SECRET_KEY).upper() == sign.upper():
+    if (
+        get_sha256(settings.SECRET_KEY + str(id) + settings.SECRET_KEY).upper()
+        != sign.upper()
+    ):
         return HttpResponseForbidden()
     oauthuser = get_object_or_404(OAuthUser, pk=id)
     with transaction.atomic():
@@ -159,13 +158,15 @@ def emailconfirm(request, id, sign):
                 <br />
                 如果上面链接无法打开，请将此链接复制至浏览器。
                 {url}
-    '''.format(type=oauthuser.type, url='http://' + site)
+    '''.format(
+        type=oauthuser.type, url=f'http://{site}'
+    )
 
     send_email(emailto=[oauthuser.email, ], title='恭喜您绑定成功!', content=content)
     url = reverse('oauth:bindsuccess', kwargs={
         'oauthid': id
     })
-    url = url + '?type=success'
+    url = f'{url}?type=success'
     return HttpResponseRedirect(url)
 
 
@@ -176,10 +177,6 @@ class RequireEmailView(FormView):
     def get(self, request, *args, **kwargs):
         oauthid = self.kwargs['oauthid']
         oauthuser = get_object_or_404(OAuthUser, pk=oauthid)
-        if oauthuser.email:
-            pass
-            # return HttpResponseRedirect('/')
-
         return super(RequireEmailView, self).get(request, *args, **kwargs)
 
     def get_initial(self):
@@ -227,7 +224,7 @@ class RequireEmailView(FormView):
         url = reverse('oauth:bindsuccess', kwargs={
             'oauthid': oauthid
         })
-        url = url + '?type=email'
+        url = f'{url}?type=email'
         return HttpResponseRedirect(url)
 
 
@@ -235,12 +232,11 @@ def bindsuccess(request, oauthid):
     type = request.GET.get('type', None)
     oauthuser = get_object_or_404(OAuthUser, pk=oauthid)
     if type == 'email':
-        title = '绑定成功'
         content = "恭喜您，还差一步就绑定成功了，请登录您的邮箱查看邮件完成绑定，谢谢。"
     else:
-        title = '绑定成功'
         content = "恭喜您绑定成功，您以后可以使用{type}来直接免密码登录本站啦，感谢您对本站对关注。".format(
             type=oauthuser.type)
+    title = '绑定成功'
     return render(request, 'oauth/bindsuccess.html', {
         'title': title,
         'content': content

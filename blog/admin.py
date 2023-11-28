@@ -19,8 +19,7 @@ class ArticleListFilter(admin.SimpleListFilter):
             yield (author.id, _(author.username))
 
     def queryset(self, request, queryset):
-        id = self.value()
-        if id:
+        if id := self.value():
             return queryset.filter(author__id__exact=id)
         else:
             return queryset
@@ -84,7 +83,7 @@ class ArticlelAdmin(admin.ModelAdmin):
     def link_to_category(self, obj):
         info = (obj.category._meta.app_label, obj.category._meta.model_name)
         link = reverse('admin:%s_%s_change' % info, args=(obj.category.id,))
-        return format_html(u'<a href="%s">%s</a>' % (link, obj.category.name))
+        return format_html(f'<a href="{link}">{obj.category.name}</a>')
 
     link_to_category.short_description = '分类目录'
 
@@ -99,12 +98,9 @@ class ArticlelAdmin(admin.ModelAdmin):
 
     def get_view_on_site_url(self, obj=None):
         if obj:
-            url = obj.get_full_url()
-            return url
-        else:
-            from djangoblog.utils import get_current_site
-            site = get_current_site().domain
-            return site
+            return obj.get_full_url()
+        from djangoblog.utils import get_current_site
+        return get_current_site().domain
 
 
 class TagAdmin(admin.ModelAdmin):
